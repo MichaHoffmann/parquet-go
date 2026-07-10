@@ -116,6 +116,7 @@ func (v *onceValue[T]) load(f func() *T) *T {
 //	time         | for int32, int64, time.Duration, and *time.Duration types, use the TIME logical type
 //	timestamp    | for int64, time.Time, and *time.Time types, use the TIMESTAMP logical type (default millisecond precision)
 //	split        | for float32 and float64 types, use the BYTE_STREAM_SPLIT encoding
+//	alp          | for float32 and float64 types, use experimental ALP encoding ID 10 (provisional wire format)
 //	geometry     | for []byte types, use the GEOMETRY logical type; use geometry(crs) to set the CRS
 //	geography    | for []byte types, use the GEOGRAPHY logical type; use geography(crs:algorithm) to set the CRS and edge algorithm
 //	int(n)       | for integer types, use the parquet INT logical type with the given bit width (8, 16, 32, or 64)
@@ -1070,6 +1071,19 @@ func makeNodeOf(path []string, t reflect.Type, name string, tags parquetTags, ta
 					} else {
 						throwInvalidTag(t, name, option)
 					}
+				default:
+					throwInvalidTag(t, name, option)
+				}
+
+			case "alp":
+				// ALP is an explicit opt-in while its Parquet wire format is provisional.
+				kind := t.Kind()
+				if kind == reflect.Ptr {
+					kind = t.Elem().Kind()
+				}
+				switch kind {
+				case reflect.Float32, reflect.Float64:
+					setEncoding(&ALP)
 				default:
 					throwInvalidTag(t, name, option)
 				}

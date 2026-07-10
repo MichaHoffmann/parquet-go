@@ -606,6 +606,11 @@ const (
 	// This itself does not reduce the size of the data but can lead to better compression
 	// afterwards.
 	ByteStreamSplit Encoding = 9
+
+	// ALP is an experimental, opt-in encoding for FLOAT and DOUBLE columns.
+	// Value 10 matches the current Arrow and parquet-java draft fixtures; ALP is
+	// not yet ratified by the parquet-format specification.
+	ALP Encoding = 10
 )
 
 func (e Encoding) String() string {
@@ -628,6 +633,8 @@ func (e Encoding) String() string {
 		return "RLE_DICTIONARY"
 	case ByteStreamSplit:
 		return "BYTE_STREAM_SPLIT"
+	case ALP:
+		return "ALP"
 	default:
 		return "Encoding(?)"
 	}

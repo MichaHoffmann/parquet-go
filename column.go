@@ -742,6 +742,16 @@ func (c *Column) decodeDataPage(header DataPageHeader, numValues int, repetition
 	pageEncoding := LookupEncoding(header.Encoding())
 	pageType := c.Type()
 	pageKind := pageType.Kind()
+	countDecoder, payloadDeclaresCount := pageEncoding.(encoding.ValueCountDecoder)
+	if payloadDeclaresCount {
+		encodedCount, err := countDecoder.DecodeValueCount(data)
+		if err != nil {
+			return nil, fmt.Errorf("decoding page payload value count: %w", err)
+		}
+		if encodedCount != numValues {
+			return nil, fmt.Errorf("page header declares %d values but encoded payload declares %d: %w", numValues, encodedCount, ErrCorrupted)
+		}
+	}
 
 	if isDictionaryEncoding(pageEncoding) {
 		// In some legacy configurations, the PLAIN_DICTIONARY encoding is used
@@ -760,6 +770,9 @@ func (c *Column) decodeDataPage(header DataPageHeader, numValues int, repetition
 	case pageEncoding.CanDecodeInPlace():
 		vbuf = page
 		pageValues = data
+	case payloadDeclaresCount:
+		// Let the decoder validate the payload structure before allocating the
+		// storage declared by its untrusted value count.
 	default:
 		vbuf = buffers.get(pageType.EstimateDecodeSize(numValues, data, pageEncoding))
 		defer vbuf.unref()

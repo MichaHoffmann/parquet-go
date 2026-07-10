@@ -16,7 +16,9 @@ const (
 // The Encoding interface is implemented by types representing parquet column
 // encodings.
 //
-// Encoding instances must be safe to use concurrently from multiple goroutines.
+// Encoding instances are normally immutable and safe to use concurrently from
+// multiple goroutines. Values explicitly returned as ResettableEncoding are the
+// per-owner mutable exception described by that interface.
 type Encoding interface {
 	// Returns a human-readable name for the encoding.
 	String() string
@@ -69,4 +71,20 @@ type Encoding interface {
 	// When this method returns true, the encoding supports receiving the same
 	// buffer as source and destination.
 	CanDecodeInPlace() bool
+}
+
+// ResettableEncoding is an Encoding with reusable mutable state. Unlike an
+// ordinary shared Encoding, each instance requires exclusive ownership:
+// Encode, Decode, and Reset calls on the instance must not overlap.
+// Reset clears stream-specific state while permitting scratch capacity reuse.
+type ResettableEncoding interface {
+	Encoding
+	Reset()
+}
+
+// ValueCountDecoder is implemented by encodings whose payload declares its
+// decoded value count. Callers may use it to validate an outer page count before
+// allocating the decode buffer.
+type ValueCountDecoder interface {
+	DecodeValueCount(src []byte) (int, error)
 }

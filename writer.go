@@ -779,6 +779,9 @@ func newConcurrentRowGroupWriter(w *writer, config *WriterConfig) *ConcurrentRow
 			columnType = dictionary.Type()
 		}
 
+		// Stateful encoding instances are created after dictionary normalization
+		// and inside the leaf loop so columns never share mutable state.
+		encoding, ownsEncoding := newColumnEncoding(encoding)
 		c := &ColumnWriter{
 			pool:                   config.ColumnPageBuffers,
 			columnPath:             leaf.path,
@@ -838,6 +841,7 @@ func newConcurrentRowGroupWriter(w *writer, config *WriterConfig) *ConcurrentRow
 
 		c.encoding = encoding
 		c.originalEncoding = encoding
+		c.originalEncodingOwned = ownsEncoding
 		c.encodings = addEncoding(c.encodings, c.encoding.Encoding())
 		sortPageEncodings(c.encodings)
 
@@ -1888,6 +1892,7 @@ type ColumnWriter struct {
 	columnFilter           BloomFilterColumn
 	encoding               encoding.Encoding
 	originalEncoding       encoding.Encoding // Original encoding before any changes
+	originalEncodingOwned  bool              // Whether the effective encoding is exclusive to this writer
 	compression            compress.Codec
 	bloomFilterCompression compress.Codec
 	dictionary             Dictionary
@@ -1943,6 +1948,9 @@ func (c *ColumnWriter) reset() {
 		c.columnType = c.originalType
 		c.encoding = c.originalEncoding
 		c.hasSwitchedToPlain = false
+	}
+	if encoding, ok := c.originalEncoding.(encoding.ResettableEncoding); c.originalEncodingOwned && ok {
+		encoding.Reset()
 	}
 	if c.originalColumnBuffer != nil {
 		c.columnBuffer = c.originalColumnBuffer

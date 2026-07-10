@@ -1,10 +1,12 @@
 package parquet
 
 import (
+	"fmt"
 	"math/bits"
 	"sync"
 
 	"github.com/parquet-go/parquet-go/encoding"
+	"github.com/parquet-go/parquet-go/encoding/alp"
 	"github.com/parquet-go/parquet-go/encoding/bitpacked"
 	"github.com/parquet-go/parquet-go/encoding/bytestreamsplit"
 	"github.com/parquet-go/parquet-go/encoding/delta"
@@ -46,6 +48,11 @@ var (
 	// ByteStreamSplit is an encoding for numeric and fixed-length binary data.
 	ByteStreamSplit bytestreamsplit.Encoding
 
+	// ALP is the experimental Adaptive Lossless floating-Point encoding for
+	// FLOAT and DOUBLE columns. It is opt-in and uses the provisional wire format
+	// implemented by the current Arrow and parquet-java draft implementations.
+	ALP alp.Encoding
+
 	// Table indexing the encodings supported by this package.
 	encodings = [...]encoding.Encoding{
 		format.Plain:                &Plain,
@@ -57,6 +64,7 @@ var (
 		format.DeltaLengthByteArray: &DeltaLengthByteArray,
 		format.DeltaByteArray:       &DeltaByteArray,
 		format.ByteStreamSplit:      &ByteStreamSplit,
+		format.ALP:                  &ALP,
 	}
 
 	// Table indexing RLE encodings for repetition and definition levels of
@@ -92,6 +100,29 @@ func isDictionaryEncoding(encoding encoding.Encoding) bool {
 
 func isDictionaryFormat(encoding format.Encoding) bool {
 	return encoding == format.PlainDictionary || encoding == format.RLEDictionary
+}
+
+// statefulEncoderFactory is implemented by shared encodings that can create a
+// mutable encoder for the exclusive use of one column writer. Every call must
+// return a distinct instance, and calls may occur concurrently.
+type statefulEncoderFactory interface {
+	NewStatefulEncoder() encoding.ResettableEncoding
+}
+
+func newColumnEncoding(enc encoding.Encoding) (encoding.Encoding, bool) {
+	factory, ok := enc.(statefulEncoderFactory)
+	if !ok {
+		return enc, false
+	}
+
+	effective := factory.NewStatefulEncoder()
+	if effective == nil {
+		panic(fmt.Sprintf("parquet: stateful encoding factory for %s returned nil", enc.Encoding()))
+	}
+	if effective.Encoding() != enc.Encoding() {
+		panic(fmt.Sprintf("parquet: stateful encoding factory for %s returned encoding %s", enc.Encoding(), effective.Encoding()))
+	}
+	return effective, true
 }
 
 func RegisterEncoding(enc encoding.Encoding) {

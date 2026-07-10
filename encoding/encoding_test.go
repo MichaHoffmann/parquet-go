@@ -12,6 +12,7 @@ import (
 	"github.com/parquet-go/bitpack/unsafecast"
 	"github.com/parquet-go/parquet-go/deprecated"
 	"github.com/parquet-go/parquet-go/encoding"
+	"github.com/parquet-go/parquet-go/encoding/alp"
 	"github.com/parquet-go/parquet-go/encoding/bitpacked"
 	"github.com/parquet-go/parquet-go/encoding/bytestreamsplit"
 	"github.com/parquet-go/parquet-go/encoding/delta"
@@ -202,6 +203,7 @@ var encodings = [...]encoding.Encoding{
 	new(delta.LengthByteArrayEncoding),
 	new(delta.ByteArrayEncoding),
 	new(bytestreamsplit.Encoding),
+	new(alp.Encoding),
 }
 
 func TestEncoding(t *testing.T) {
